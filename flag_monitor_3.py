@@ -8,8 +8,12 @@ from queue import Queue
 from threading import Thread
 from screeninfo import get_monitors
 from enum import Enum
+import configparser
 
-API_KEY = "224e9e51-04ba-48f9-971f-9f6862dba1d3"
+config = configparser.ConfigParser()
+config.read('config.ini')
+
+API_KEY = config['DEFAULT']['API_KEY']
 HEADERS = {
     "Content-Type": "application/json",
     "Govee-API-Key": API_KEY
