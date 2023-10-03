@@ -162,7 +162,7 @@ def main():
             for device in devices:
                 change_color(device, r, g, b)
 
-        time.sleep(2)
+        time.sleep(1)
 
 if __name__ == "__main__":
     main()
