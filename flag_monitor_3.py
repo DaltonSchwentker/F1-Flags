@@ -35,6 +35,14 @@ class GoveeAPI:
         self.headers = {**self.HEADERS, "Govee-API-Key": api_key}
 
     def change_color(self, device, r, g, b):
+        """
+        Changes the color of the specified device.
+        
+        :param device: The device to change color.
+        :param r: Red color value.
+        :param g: Green color value.
+        :param b: Blue color value.
+        """
         payload = json.dumps({
             "device": device["id"],
             "model": device["model"],
@@ -44,6 +52,12 @@ class GoveeAPI:
         self.handle_response(device, response)
 
     def handle_response(self, device, response):
+        """
+        Handles the response from the Govee API.
+        
+        :param device: The device the request was made for.
+        :param response: The HTTP response object.
+        """
         try:
             json_response = response.json()
             if json_response.get("code") == 200:
