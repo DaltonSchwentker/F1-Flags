@@ -10,18 +10,13 @@ from screeninfo import get_monitors
 from enum import Enum
 import configparser
 
+# Load configuration
 config = configparser.ConfigParser()
 config.read('config.ini')
-
 API_KEY = config['DEFAULT']['API_KEY']
-HEADERS = {
-    "Content-Type": "application/json",
-    "Govee-API-Key": API_KEY
-}
 
-devices = [
-    {"name": "Other Strip", "model": "H61A0", "id": "E5:52:D4:AD:FC:73:DA:E1"}
-]
+# Define devices
+devices = [{"name": "Other Strip", "model": "H61A0", "id": "E5:52:D4:AD:FC:73:DA:E1"}]
 
 pending_tasks = Queue()
 
@@ -31,6 +26,43 @@ class Flag(Enum):
     RED_FLAG = "Red Flag"
     TRACK_CLEAR = "Track Clear"
     NO_FLAG = "No Flag"
+
+class GoveeAPI:
+    BASE_URL = 'https://developer-api.govee.com/v1/devices/control'
+    HEADERS = {"Content-Type": "application/json"}
+
+    def __init__(self, api_key):
+        self.headers = {**self.HEADERS, "Govee-API-Key": api_key}
+
+    def change_color(self, device, r, g, b):
+        payload = json.dumps({
+            "device": device["id"],
+            "model": device["model"],
+            "cmd": {"name": "color", "value": {"r": r, "g": g, "b": b}}
+        })
+        response = requests.put(self.BASE_URL, headers=self.headers, data=payload)
+        self.handle_response(device, response)
+
+    def handle_response(self, device, response):
+        try:
+            json_response = response.json()
+            if json_response.get("code") == 200:
+                print(f"Successfully changed color for {device['name']}")
+            else:
+                print(f"API Error. Response: {json_response}")
+        except json.JSONDecodeError:
+            print(f"Failed to decode JSON. Response: {response.text}, Status Code: {response.status_code}")
+
+govee_api = GoveeAPI(API_KEY)
+
+def process_pending_tasks():
+    while True:
+        if not pending_tasks.empty():
+            device, r, g, b = pending_tasks.get()
+            govee_api.change_color(device, r, g, b)
+        time.sleep(1)
+
+Thread(target=process_pending_tasks, daemon=True).start()
 
 def select_roi():
     monitors = get_monitors()
@@ -56,50 +88,6 @@ def select_roi():
     r_adjusted = (r[0] + chosen_monitor.x, r[1] + chosen_monitor.y, r[2], r[3])
     return r_adjusted
 
-def change_color(device, r, g, b):
-    device_id = device["id"]
-    url = 'https://developer-api.govee.com/v1/devices/control'
-    payload = json.dumps({
-        "device": device_id,
-        "model": device["model"],
-        "cmd": {
-            "name": "color",
-            "value": {
-                "r": r,
-                "g": g,
-                "b": b
-            }
-        }
-    })
-    response = requests.put(url, headers=HEADERS, data=payload)
-    remaining_calls = int(response.headers.get('API-RateLimit-Remaining'))
-    print(int(response.headers.get('API-RateLimit-Remaining')))
-    
-    if remaining_calls < 1:
-        pending_tasks.put((device, r, g, b))
-        print(f"Rate limit reached. Queued task for {device['name']}.")
-        return
-
-    handle_response(device, response)
-
-def handle_response(device, response):
-    try:
-        json_response = response.json()
-        if json_response.get("code") == 200:
-            print(f"Successfully changed color for {device['name']}")
-        else:
-            print(f"API Error. Response: {json_response}")
-    except json.JSONDecodeError:
-        print(f"Failed to decode JSON. Response: {response.text}, Status Code: {response.status_code}")
-
-def process_pending_tasks():
-    while True:
-        if not pending_tasks.empty():
-            device, r, g, b = pending_tasks.get()
-            change_color(device, r, g, b)
-        time.sleep(1)
-
-Thread(target=process_pending_tasks, daemon=True).start()
 
 def detect_flag(hsv):
     yellow_lower = np.array([20, 100, 100])
@@ -148,7 +136,7 @@ def main():
         if new_flag != current_flag:
             print(f"{new_flag.value} Detected!")
             current_flag = new_flag
-            r, g, b = 255, 255, 255
+            r, g, b = 255, 255, 255  # default color
 
             if current_flag == Flag.SAFETY_CAR:
                 r, g, b = 255, 165, 0
@@ -160,9 +148,7 @@ def main():
                 r, g, b = 0, 255, 0
 
             for device in devices:
-                change_color(device, r, g, b)
-
-        time.sleep(1)
+                govee_api.change_color(device, r, g, b)
 
 if __name__ == "__main__":
     main()
